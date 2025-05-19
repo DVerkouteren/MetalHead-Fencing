@@ -17,6 +17,8 @@
  *          --|RST               |   |        |
  *            |     P1.7/UCB0SCL |<--|------->| SCL
  *    0V,GND--|AD0               |            |
+ *    Bluetooth 3.2(TDX) and 3.3(RDX)
+ *    Switch 6.4 & GND
  *
 ********************************************************/
 #include "msp.h"
