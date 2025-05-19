@@ -1,24 +1,8 @@
-//File Name: ece230ex0603spr2025template.c
+//File Name: FinalPrjectMainspr2025template.c
 //ECE230 Spring 2024-2025
-//Jianjian Song
-//Date: April 23, 2025
+//Junhwa Kim
+//Date: May 18, 2025
 /********************************************************
- * MSP432 Lab Exercise 6-3 - eUSCI_B0 I2C Master at 100kbps using BRCLK = 3MHz
- *
- * Description: This example connects MSP432 via the I2C bus to MPU6050.
- *      SMCLK/ DCO is used as a clock source at default 3MHz. The USCI_B0
- *      TX and RX interrupt are used to know when the transmit buffer may be
- *      filled or when new data has been received.
- *
- *      This demonstrates how to implement an I2C master transmitter sending
- *      bytes followed by a repeated start, followed by a read of multiple
- *      bytes. The master sends a register address and then reads 6 bytes from
- *      the peripheral. The data from the peripheral transmitter begins at
- *      the register address and increments with each transfer.
- *
- *      This is a common operation for reading register values from I2C
- *      peripheral devices such as sensors. The transaction for the I2C
- *      that is written looks as follows:
  *  ______________________________________________________________________________
  *  |       |         |               |       |         |                 |      |
  *  | Start | Addr  W | <1 Byte Send> | Start | Addr  R |  <6 Byte Read>  | Stop |
