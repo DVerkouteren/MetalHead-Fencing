@@ -1,4 +1,4 @@
-//File Name: FinalPrjectMainspr2025template.c
+//File Name: FinalProjectBluetoothTry.c
 //ECE230 Spring 2024-2025
 //Junhwa Kim
 //Date: May 18, 2025
