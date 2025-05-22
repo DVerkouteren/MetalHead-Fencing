@@ -1,0 +1,135 @@
+#include "BluetoothSerial.h"   // ESP32 Bluetooth SPP serial library
+#include <Servo.h>             // Servo library for controlling the servo motor
+
+BluetoothSerial SerialBT;
+Servo gyroServo;
+Servo gyroServo2;
+
+// (1) before setup, define the 6-byte MAC
+uint8_t hc06Mac[6] = { 0x98, 0xDA, 0x60, 0x07, 0xA8, 0xB9 };
+const char* remoteDeviceName = "HC06_JK_9600";   // Name of the HC-06 module (default is "HC-06")
+const char* remotePin = "1234";           // PIN code of HC-06 (default is "1234")
+const int SERVO_PIN = 19;                // GPIO pin for the servo signal
+const int SERVO_CENTER = 90;             // Servo center position (degrees) when X-axis is 0
+int x = 0;
+int y = 0;
+int z = 0;
+int xValue1 = 0;
+int yValue1 = 0;
+int zValue1 = 0;
+int targetAngle = 90;
+int targetAngle2 = 90;
+int targetAngle3 = 90;
+
+void setup() {
+  Serial.begin(115200);                    // Initialize USB serial for debug output
+  delay(1000);
+  Serial.println("ESP32 Bluetooth Serial Receiver Starting...");
+
+  // Attach and initialize servo
+  gyroServo.attach(SERVO_PIN);
+  gyroServo.write(SERVO_CENTER);  // center the servo at 90 degrees initially
+  Serial.println("Servo attached to GPIO 19, centered at 90 degrees.");
+  gyroServo2.attach(23);
+  gyroServo2.write(SERVO_CENTER); 
+
+  // Initialize Bluetooth in master mode and set pin
+  SerialBT.begin("ESP32_GyroReceiver", true);  // true = ESP32 in Bluetooth **master** mode
+  SerialBT.setPin(remotePin,4);                  // Set PIN for pairing (use default "1234" or your HC-06's PIN)
+  Serial.println("Bluetooth initialized in master mode. Attempting to connect to HC-06...");
+
+  // Attempt to connect to the HC-06 Bluetooth module
+  bool connected = SerialBT.connect(remoteDeviceName);
+  if (SerialBT.connect(hc06Mac, /* channel */ 1)) {
+    Serial.println("✅ Connected to HC-06 Bluetooth module!");
+  } else {
+    Serial.println("❌ Failed to connect to HC-06. Ensure the HC-06 is powered on and in range.");
+  }
+
+  // If not connected, you could optionally retry connection:
+  if (!SerialBT.connected()) {
+    // Try reconnect periodically (not too fast to avoid blocking)
+    static unsigned long lastAttemptTime = 0;
+    if (millis() - lastAttemptTime > 50000) {  // retry every 5 seconds
+      lastAttemptTime = millis();
+      Serial.println("Re-trying Bluetooth connection...");
+      if (SerialBT.connect(remoteDeviceName)) {
+        Serial.println("✅ Reconnected to HC-06!");
+      } else {
+        Serial.println("Still not connected. Check HC-06 power or pairing.");
+      }
+    }
+    // If not connected, skip the rest of loop until connected
+    return;
+  }
+}
+
+void loop() {
+  
+
+  // Read incoming data from HC-06 via Bluetooth
+  if (SerialBT.available()) {
+    String data = SerialBT.readStringUntil('\n');  // read until newline (assuming MSP432 sends '\n' at end)
+    if (data.length() > 0) {
+      Serial.print("Received values: ");
+      Serial.print(data);               // e.g. prints "1,0,-1" 
+
+      // Parse the comma-separated string to extract X-axis (first value)
+      int firstComma   = data.indexOf(',');
+      int secondComma  = data.indexOf(',', firstComma   + 1);
+      int thirdComma   = data.indexOf(',', secondComma  + 1);
+      String xStr = (firstComma  == -1) ? data : data.substring(0, firstComma);
+      String yStr = (secondComma == -1) ? data.substring(firstComma + 1): data.substring(firstComma + 1, secondComma);
+      String zStr = (thirdComma  == -1) ? data.substring(secondComma + 1): data.substring(secondComma + 1, thirdComma);
+      String btnStr = (thirdComma == -1) ? "": data.substring(thirdComma + 1);
+
+      // Convert to integers
+      int xValue = xStr.toInt();
+      int yValue = yStr.toInt();
+      int zValue = zStr.toInt();
+      int Button = btnStr.toInt();
+
+      if(Button == 1){
+        targetAngle =90;
+        targetAngle2 = 90;
+        targetAngle3 = 90;
+        xValue1 = xValue;
+        yValue1 = yValue;
+        zValue1 = zValue;
+      } else{
+              if(xValue1-xValue>0.5){
+                  x = 1*(xValue1-xValue);
+             } else if( xValue1-xValue<-0.5){
+                  x = (xValue1-xValue);
+             }else{
+                  x =0;
+             }
+             Serial.println("   "+x); 
+            targetAngle = 90 + x * 18;  
+
+            if(yValue1-yValue>0.6){
+                  y = 1*(yValue1-yValue);
+             } else if( yValue1-yValue<-0.6){
+                  y = (yValue1-yValue);
+             }else{
+                  y =0;
+             }
+             targetAngle2 = 90 + y * 30;  
+      }
+      // Clamp the target angle to valid servo range [0, 180] degrees
+      if (targetAngle > 180) targetAngle = 180;
+      if (targetAngle < 0) targetAngle = 0;
+      if (targetAngle2 > 180) targetAngle2 = 180;
+      if (targetAngle2 < 0) targetAngle2 = 0;
+      if (targetAngle3 > 180) targetAngle3 = 180;
+      if (targetAngle3 < 0) targetAngle3 = 0;
+
+      // Move servo to the target angle
+      gyroServo.write(targetAngle);
+      gyroServo2.write(targetAngle2);
+      // Serial.print("Servo moved to ");
+      // Serial.print(targetAngle);
+      // Serial.println(" degrees.");
+    }
+  }
+}
