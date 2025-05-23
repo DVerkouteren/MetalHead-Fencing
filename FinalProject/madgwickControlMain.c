@@ -1,4 +1,4 @@
-//File Name: madgwickControlMain.c
+//File Name: FinalPrjectMainspr2025template.c
 //ECE230 Spring 2024-2025
 //Junhwa Kim
 //Date: May 18, 2025
@@ -30,6 +30,10 @@
 //switch port and masks
 #define SwitchPort P6   //Port 6
 #define Switch1   0b00010000    //P6.4
+#define Switch2   0b100000 //P6.5
+#define Switch3   0b1000000 // P6.6
+#define Switch4   0b10000000 //P6.7
+#define Switch5   0b10 //P6.1
 
 #define I2Cport P1
 #define SCLPIN  BIT7
@@ -43,6 +47,8 @@ enum {g2, g4, g8, g16} gFullScale=g2;  //2g, 4g, 8g and 16g mapped t0 0, 1,2,3
 #define GY521_ADDRESS      0x68    // AD0=GND, I2C address of GY-521 sensor
 /* TODO update register addresses   */
 #define ACCEL_BASE_ADDR  0x3B    // base address of accelerometer data registers
+#define GYRO_BASE_ADDR  0x43   // GYRO_XOUT_H
+
 #define PWR_MGMT_ADDR           0x6B    // address of power management register
 
 uint8_t RXData[NUM_OF_REC_BYTES] = {0, 0, 0, 0, 0, 0};
@@ -55,6 +61,8 @@ float gx_off, gy_off, gz_off;
 #define DELTA_T           (1.0f/SAMPLE_FREQ)
 #define BETA              0.1f
 #define GYRO_CAL_SAMPLES  500
+
+volatile uint8_t currentRegister;
 
 void UART_init(void);
 void UART_sendChar(char c);
@@ -74,6 +82,30 @@ void main(void)
     SwitchPort->OUT |= Switch1;
     SwitchPort->REN |= Switch1;
 
+    SwitchPort->DIR &= ~Switch2;
+    SwitchPort->SEL0 &= ~Switch2;
+    SwitchPort->SEL1 &= ~Switch2;
+    SwitchPort->OUT |= Switch2;
+    SwitchPort->REN |= Switch2;
+
+    SwitchPort->DIR &= ~Switch3;
+    SwitchPort->SEL0 &= ~Switch3;
+    SwitchPort->SEL1 &= ~Switch3;
+    SwitchPort->OUT |= Switch3;
+    SwitchPort->REN |= Switch3;
+
+    SwitchPort->DIR &= ~Switch4;
+    SwitchPort->SEL0 &= ~Switch4;
+    SwitchPort->SEL1 &= ~Switch4;
+    SwitchPort->OUT |= Switch4;
+    SwitchPort->REN |= Switch4;
+
+    SwitchPort->DIR &= ~Switch5;
+    SwitchPort->SEL0 &= ~Switch5;
+    SwitchPort->SEL1 &= ~Switch5;
+    SwitchPort->OUT |= Switch5;
+    SwitchPort->REN |= Switch5;
+
 
     volatile uint32_t i;
     volatile int16_t accel_x, accel_y, accel_z;
@@ -86,6 +118,10 @@ void main(void)
     float accel_z2 = 0;
     char buf[64];
     int Pressed = 0;
+    int Pressed2 = 0;
+    int Pressed3 = 0;
+    int Pressed4 = 0;
+    int Pressed5 = 0;
 
     float pitch, roll, yaw;
     float sumx=0, sumy=0, sumz=0;
@@ -178,35 +214,46 @@ void main(void)
     __enable_irq();
 
 //Calibration**************************************************************************
-    for ( cal_i = 0; cal_i < GYRO_CAL_SAMPLES; cal_i++) {
-        ax=(int16_t)(RXData[0]<<8|RXData[1]);
-        ay=(int16_t)(RXData[2]<<8|RXData[3]);
-        az=(int16_t)(RXData[4]<<8|RXData[5]);
-        // after accel, trigger next read for gyro (same registers)
-        RXDataPointer = 0;
-        EUSCI_B0->CTLW0 |= EUSCI_B_CTLW0_TR | EUSCI_B_CTLW0_TXSTT;
-        while (RXDataPointer < NUM_OF_REC_BYTES);
-        gx=(int16_t)(RXData[0]<<8|RXData[1]);
-        gy=(int16_t)(RXData[2]<<8|RXData[3]);
-        gz=(int16_t)(RXData[4]<<8|RXData[5]);
-        sumx += gx; sumy += gy; sumz += gz;
-        for ( d = 2000; d > 0; d--);  // lazy delay
-    }
-    gx_off = sumx / GYRO_CAL_SAMPLES;
-    gy_off = sumy / GYRO_CAL_SAMPLES;
-    gz_off = sumz / GYRO_CAL_SAMPLES;
+    gx_off = 0;
+    gy_off = 0;
+    gz_off = 0;
 //*************************************************************************************
 
     while (1) {
         // Arbitrary delay before transmitting the next byte
         for (i = 2000; i > 0; i--);        // lazy delay
+                //Switch button first:
+                if ((SwitchPort->IN & Switch1) == 0) {
+                  for (i = 50000; i; --i);
+                  Pressed = 1;
+                } else {
+                  Pressed = 0;
+                }
+        for (i = 2000; i > 0; i--);        // lazy delay
         //Switch button first:
-        if ((SwitchPort->IN & Switch1) == 0) {
+        if ((SwitchPort->IN & Switch2) == 0) {
           for (i = 50000; i; --i);
-          Pressed = 1;
+          Pressed2 = 1;
         } else {
-          Pressed = 0;
+          Pressed2 = 0;
         }
+        for (i = 2000; i > 0; i--);        // lazy delay
+                //Switch button first:
+                if ((SwitchPort->IN & Switch3) == 0) {
+                  for (i = 50000; i; --i);
+                  Pressed3 = 1;
+                } else {
+                  Pressed3 = 0;
+        }
+         for (i = 2000; i > 0; i--);        // lazy delay
+          //Switch button first:
+             if ((SwitchPort->IN & Switch4) == 0) {
+             for (i = 50000; i; --i);
+                  Pressed4 = 1;
+              } else {
+                  Pressed4 = 0;
+         }
+
         // Ensure stop condition got sent
         while (EUSCI_B0->CTLW0 & EUSCI_B_CTLW0_TXSTP);
 
@@ -227,12 +274,14 @@ void main(void)
         /* TODO combine bytes to form 16-bit acceleration values for accel_x, accel_y, accel_z */
         //Madgwick caomputation
         //*********************************************************************************************
-
             ax=(int16_t)(RXData[0]<<8|RXData[1]);
             ay=(int16_t)(RXData[2]<<8|RXData[3]);
             az=(int16_t)(RXData[4]<<8|RXData[5]);
             // after accel, trigger next read for gyro (same registers)
-            EUSCI_B0->CTLW0|=EUSCI_B_CTLW0_TR|EUSCI_B_CTLW0_TXSTT;   // pointer to ACCEL_XOUT_H
+            currentRegister = GYRO_BASE_ADDR;
+            RXDataPointer = TXDataPointer = 0;
+            EUSCI_B0->CTLW0 |= EUSCI_B_CTLW0_TR | EUSCI_B_CTLW0_TXSTT;
+
             while(RXDataPointer<NUM_OF_REC_BYTES);
             gx=(int16_t)(RXData[0]<<8|RXData[1]);
             gy=(int16_t)(RXData[2]<<8|RXData[3]);
@@ -262,75 +311,62 @@ void main(void)
             recipNorm=1.0f/sqrtf(q0*q0+q1*q1+q2*q2+q3*q3); q0*=recipNorm; q1*=recipNorm; q2*=recipNorm; q3*=recipNorm;
 
             // To Euler
-            pitch = atan2f(2*(q0*q1+q2*q3),1-2*(q1*q1+q2*q2))*57.2958f;
-            roll  = asinf(2*(q0*q2-q3*q1))*57.2958f;
-            yaw   = atan2f(2*(q0*q3+q1*q2),1-2*(q2*q2+q3*q3))*57.2958f;
+            pitch = atan2f(2*(q0*q1+q2*q3),1-2*(q1*q1+q2*q2))*57.2958f;//button2
+            roll  = asinf(2*(q0*q2-q3*q1))*57.2958f;//button3
+            yaw   = atan2f(2*(q0*q3+q1*q2),1-2*(q2*q2+q3*q3))*57.2958f;//button4
+//            if(Pressed2 == 0){
+//                pitch = 0;
+//            }
+//            if(Pressed3 ==0 ){
+//                roll = 0;
+//            }
+//            if(Pressed4 == 0){
+//                yaw = 0;
+//            }
         //*********************************************************************************************
-        accel_x =(RXData[0] << 8) + (RXData[1]);
-        accel_y=(RXData[2] << 8) + (RXData[3]);
-        accel_z=(RXData[4] << 8) + (RXData[5]);
-        if(accel_x1-accel_x >5000){
-            accel_x2 = 1;
-        }else if(accel_x1-accel_x < -5000){
-            accel_x2 = -1;
-        }else{
-            accel_x2 = 0;
-        }
-        accel_x1 = accel_x;// this is why
-
-        if(accel_y1-accel_y >5000){
-                    accel_y2 = 1;
-                }else if(accel_y1-accel_y < -5000){
-                    accel_y2 = -1;
-                }else{
-                    accel_y2 = 0;
-                }
-                accel_y1 = accel_y;
-
-        if(accel_z1-accel_z >5000){
-             accel_z2 = 1;
-        }else if(accel_z1-accel_z < -5000){
-              accel_z2 = -1;
-        }else{
-             accel_z2 = 0;
-        }
-         accel_z1 = accel_z;
-
-         accel_x_g = (float) accel_x/fullscale1g;
-         accel_y_g = (float) accel_y/fullscale1g;
-         accel_z_g = (float) accel_z/fullscale1g;
-         // send exactly “<X>,<Y>,<Z>\r\n”
-         sprintf(buf,"P:%.2f,R:%.2f,Y:%.2f,%d\r\n",pitch,roll,yaw,Pressed);
-
-         printf("P: %.2f\tR: %.2f\tY: %.2f\tBtn: %d\r\n",pitch, roll, yaw, Pressed);
-//         sprintf(buf, "%d,%d,%d,%d\r\n",
-//                 accel_x,
-//                 accel_y,
-//                 accel_z,
-//                 Pressed);
+//        accel_x =(RXData[0] << 8) + (RXData[1]);
+//        accel_y=(RXData[2] << 8) + (RXData[3]);
+//        accel_z=(RXData[4] << 8) + (RXData[5]);
+//        if(accel_x1-accel_x >5000){
+//            accel_x2 = 1;
+//        }else if(accel_x1-accel_x < -5000){
+//            accel_x2 = -1;
+//        }else{
+//            accel_x2 = 0;
+//        }
+//        accel_x1 = accel_x;// this is why
+//
+//        if(accel_y1-accel_y >5000){
+//                    accel_y2 = 1;
+//                }else if(accel_y1-accel_y < -5000){
+//                    accel_y2 = -1;
+//                }else{
+//                    accel_y2 = 0;
+//                }
+//                accel_y1 = accel_y;
+//
+//        if(accel_z1-accel_z >5000){
+//             accel_z2 = 1;
+//        }else if(accel_z1-accel_z < -5000){
+//              accel_z2 = -1;
+//        }else{
+//             accel_z2 = 0;
+//        }
+//         accel_z1 = accel_z;
+//
+//         accel_x_g = (float) accel_x/fullscale1g;
+//         accel_y_g = (float) accel_y/fullscale1g;
+//         accel_z_g = (float) accel_z/fullscale1g;
+         sprintf(buf, "%.2f,%.2f,%.2f,%d, %d\r\n", pitch, roll, yaw, Pressed,Pressed2 );
          UART_sendString(buf);
+//         printf("P: %.2f\tR: %.2f\tY: %.2f\tBtn: %d\r\n",pitch, roll, yaw, Pressed);
 
 
-//         printf("\n\r");
-//         printf("\r\n   accel_x = %d", accel_x);
-//         printf("   accel_y = %d", accel_y);
-//         printf("   accel_z = %d", accel_z2);
-//         printf("   Pressed = %d", Pressed);
-         if(accel_x2 !=0){
-             accel_x1 = 0;
-             for (i = 200000; i > 0; i--);        // lazy delay
-         }else if(accel_y2 !=0){
-                      accel_y1 = 0;
-                      for (i = 200000; i > 0; i--);        // lazy delay
-          }else if(accel_z2 !=0){
-                      accel_z1 = 0;
-                      for (i = 200000; i > 0; i--);        // lazy delay
-                  }
 //         printf("\r\n   accel_x = %f", accel_x_g);
 //         printf("   accel_y = %f", accel_y_g);
 //         printf("   accel_z = %f", accel_z_g);
          RXDataPointer = 0;
-         for (i = 2000; i > 0; i--);        // lazy delay
+         for (i = 40000; i > 0; i--);        // lazy delay
 
         RXDataPointer = 0;
     }
@@ -409,7 +445,7 @@ void EUSCIB0_IRQHandler(void)
     if (EUSCI_B0->IFG & EUSCI_B_IFG_TXIFG0) {
         if (TXDataPointer == 0) {
             // load 1st data byte into TX buffer (writing to buffer clears the flag)
-            EUSCI_B0->TXBUF = ACCEL_BASE_ADDR;      // send register address
+            EUSCI_B0->TXBUF = currentRegister ;      // send register address
             TXDataPointer = 1;
         } else {
             // change to receiver mode (Read)
