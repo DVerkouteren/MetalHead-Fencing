@@ -1,0 +1,361 @@
+
+
+
+#include "BluetoothSerial.h"  // ESP32 Bluetooth SPP serial library
+#include <Servo.h>            // Servo library for controlling the servo motor
+
+
+//define pins
+#define headPin 15
+#define swordPin 13
+int voltages[] = { 0, 0, 0, 0, 0 };
+int indexa = 0;
+
+//servos
+Servo LegServo;
+Servo FloorServo;
+Servo HipServo;
+Servo ArmServo;
+
+#define servoFloorPin 2
+#define servoLegPin 16
+#define servoHipPin 0
+#define servoArmPin 12
+
+//8 sending/recieving
+//15 sending/ recieving
+
+//22 for bluetooth LED
+
+#define floorStartingPos 90
+#define legStartingPos 40
+#define hipStartingPos 90
+#define armStartingPos 0
+
+double floorPos = legStartingPos;
+double legPos = legStartingPos;
+double hipPos = legStartingPos;
+double armPos = legStartingPos;
+
+double prevfloorPos = legStartingPos;
+double prevlegPos = legStartingPos;
+double prevhipPos = legStartingPos;
+double prevarmPos = legStartingPos;
+
+//joystick
+// #define Xaxis 32
+// #define Yaxis 33
+// #define Jswitch 25
+
+int switchCount = 0;
+
+//LED
+#define LEDPin 19
+#define BLED 22
+
+#define transPin 15
+#define recPin 17
+
+//game switch
+#define gameSwitch 32
+
+bool gameActive = true;
+int gameVoltage;
+
+BluetoothSerial SerialBT;
+
+
+
+
+
+/*
+Select your controller here:
+*/
+//Controller 1 AKA STARBUCKS
+//John's MAC: 0x98, 0xDA, 0x60, 0x07, 0xA8, 0xB9
+//uint8_t hc06Mac[6] = { 0x98, 0xDA, 0x60, 0x07, 0xA8, 0xB9 }; // for John
+
+//Controller 2 AKA PEPSI
+//Danes MAC: 0x98, 0xDA, 0x60, 0x07, 0x6B, 0x64
+uint8_t hc06Mac[6] = { 0x98, 0xDA, 0x60, 0x07, 0x6B, 0x64 };  // for Dane
+
+
+
+
+
+
+const char* remoteDeviceName = "HC06_JK_9600";  // Name of the HC-06 module (default is "HC-06")
+const char* remotePin = "1234";                 // PIN code of HC-06 (default is "1234")
+const int SERVO_PIN = 19;                       // GPIO pin for the servo signal
+const int SERVO_CENTER = 90;                    // Servo center position (degrees) when X-axis is 0
+int x = 0;
+int y = 0;
+int z = 0;
+int xValue1 = 0;
+int yValue1 = 0;
+int zValue1 = 0;
+int targetAngle = 90;
+int targetAngle2 = 90;
+int targetAngle3 = 90;
+
+void setup() {
+  Serial.begin(115200);  // Initialize USB serial for debug output
+
+  //define pinmodes
+  //head/sword
+  pinMode(headPin, OUTPUT);
+  pinMode(swordPin, INPUT);
+
+  //servos
+  FloorServo.attach(servoFloorPin);
+  LegServo.attach(servoLegPin);
+  HipServo.attach(servoHipPin);
+  ArmServo.attach(servoArmPin);
+
+  FloorServo.write(floorStartingPos);
+  LegServo.write(legStartingPos);
+  HipServo.write(hipStartingPos);
+  ArmServo.write(armStartingPos);
+
+  //LED
+  pinMode(LEDPin, OUTPUT);
+  pinMode(BLED, OUTPUT);
+
+  //switch
+  pinMode(gameSwitch, INPUT);
+
+
+  //init LED
+  digitalWrite(LEDPin, 0);
+  digitalWrite(BLED, 0);
+
+  //trans/rec
+  pinMode(transPin, OUTPUT);
+  pinMode(recPin, INPUT);
+
+  digitalWrite(transPin, 0);
+
+
+
+  delay(1000);
+  Serial.println("ESP32 Bluetooth Serial Receiver Starting...");
+
+  // Initialize Bluetooth in master mode and set pin
+  SerialBT.begin("ESP32_GyroReceiver", true);  // true = ESP32 in Bluetooth **master** mode
+  SerialBT.setPin(remotePin, 4);               // Set PIN for pairing (use default "1234" or your HC-06's PIN)
+  Serial.println("Bluetooth initialized in master mode. Attempting to connect to HC-06...");
+
+  // Attempt to connect to the HC-06 Bluetooth module
+  bool connected = SerialBT.connect(remoteDeviceName);
+  if (SerialBT.connect(hc06Mac, /* channel */ 1)) {
+
+    Serial.println("✅ Connected to HC-06 Bluetooth module!");
+    digitalWrite(BLED, 1);
+  } else {
+    Serial.println("❌ Failed to connect to HC-06. Ensure the HC-06 is powered on and in range.");
+  }
+
+  // If not connected, you could optionally retry connection:
+  if (!SerialBT.connected()) {
+    // Try reconnect periodically (not too fast to avoid blocking)
+    static unsigned long lastAttemptTime = 0;
+    if (millis() - lastAttemptTime > 50000) {  // retry every 5 seconds
+      lastAttemptTime = millis();
+      Serial.println("Re-trying Bluetooth connection...");
+      if (SerialBT.connect(remoteDeviceName)) {
+        Serial.println("✅ Reconnected to HC-06!");
+        digitalWrite(BLED, 1);
+      } else {
+        Serial.println("Still not connected. Check HC-06 power or pairing.");
+        digitalWrite(BLED, 0);
+      }
+    }
+    // If not connected, skip the rest of loop until connected
+    return;
+  }
+}
+
+void loop() {
+
+
+
+
+  // Read incoming data from HC-06 via Bluetooth
+  if (SerialBT.available()) {
+
+
+
+    String data = SerialBT.readStringUntil('\n');  // read until newline (assuming MSP432 sends '\n' at end)
+    if (data.length() > 0) {
+      Serial.print("Received values: ");
+      Serial.print(data);  // e.g. prints "1,0,-1"
+      Serial.println("   " + x);
+
+      // Parse the comma-separated string to extract X-axis (first value)
+      int firstComma = data.indexOf(',');
+      int secondComma = data.indexOf(',', firstComma + 1);
+      int thirdComma = data.indexOf(',', secondComma + 1);
+      int fourthComma = data.indexOf(',', thirdComma + 1);
+      String xStr = (firstComma == -1) ? data : data.substring(0, firstComma);
+      String yStr = (secondComma == -1) ? data.substring(firstComma + 1) : data.substring(firstComma + 1, secondComma);
+      String zStr = (thirdComma == -1) ? data.substring(secondComma + 1) : data.substring(secondComma + 1, thirdComma);
+      String btnStr = (fourthComma == -1) ? data.substring(thirdComma + 1) : data.substring(thirdComma + 1, fourthComma);
+      String btn2Str = (fourthComma == -1) ? "" : data.substring(fourthComma + 1);
+
+      // Convert to integers
+      int xValue = xStr.toInt();
+      int yValue = yStr.toInt();
+      int zValue = zStr.toInt();
+      int Button = btnStr.toInt();
+      int Button2 = btn2Str.toInt();
+
+
+      if (Button2 == 1 && switchCount <= -25) {
+        switchCount = 5;
+        armPos = 40;
+      } else if (switchCount <= 0) {
+        armPos = 0;
+      }
+      switchCount--;
+
+
+      if (Button == 1) {
+        floorPos = floorStartingPos;
+        legPos = legStartingPos;
+        hipPos = hipStartingPos;
+        xValue1 = xValue;
+        yValue1 = yValue;
+        zValue1 = zValue;
+      } else {
+        if (xValue1 - xValue > 0.7) {
+          x = -1 * (xValue1 - xValue);
+        } else if (xValue1 - xValue < -0.7) {
+          x = -1 * (xValue1 - xValue);
+        } else {
+          x = 0;
+        }
+
+        if (yValue1 - yValue > 0.5) {
+          y = 1 * (yValue1 - yValue);
+        } else if (yValue1 - yValue < -0.5) {
+          y = (yValue1 - yValue);
+        } else {
+          y = 0;
+        }
+
+        if (zValue1 - zValue > 0.6) {
+          z = 1 * (zValue1 - zValue);
+        } else if (zValue1 - zValue < -0.6) {
+          z = (zValue1 - zValue);
+        } else {
+          z = 0;
+        }
+        floorPos = 90 + -1*z * 20;
+        legPos = 30 + x * 5;
+        hipPos = 90 + y * 25;
+        
+      }
+
+
+      //gameVoltage = analogRead(gameSwitch);
+      //Serial.print(gameVoltage);
+
+      // if (gameVoltage == 0) {
+      //   gameActive = !gameActive;
+      //   Serial.print("Activated: ");
+      //   Serial.print(gameActive);
+      //   //delay(500);
+      // }
+
+      //   // Move servo to the target angle
+      //   if (gameActive) {
+      //     writeServos();
+      //     checkForWin();
+      //   }
+
+      writeServos();
+      checkForWin();
+    }
+  }
+}
+
+void writeServos() {
+  //map and cap servo range
+
+  const int maxLegAngle = 50;
+  const int minLegAngle = 20;
+
+  const int maxFloorAngle = 100;
+  const int minFloorAngle = 80;
+
+  const double smoothingConst = 0.4;
+  const double smoothingConst2 = 0.2;
+  const double smoothingConst3 = 0.6;
+
+
+
+  floorPos = min(max(smoothingConst * floorPos + (1 - smoothingConst) * prevfloorPos, (double)minFloorAngle), (double)maxFloorAngle);
+  legPos = min(max(smoothingConst2 * legPos + (1 - smoothingConst2) * prevlegPos, (double)minLegAngle), (double)maxLegAngle);
+  hipPos = min(max(smoothingConst3 * hipPos + (1 - smoothingConst3) * prevhipPos, 0.0), 180.0);
+
+  prevfloorPos = floorPos;
+  prevlegPos = legPos;
+  prevhipPos = hipPos;
+
+
+
+  // Serial.print("X axis:");
+  // Serial.print(X);
+  // Serial.print(", Leg Pos: ");
+  // Serial.print(legPos);
+  // Serial.print(", Y axis: ");
+  // Serial.print(Y);
+  // Serial.print(", Hip Pos: ");
+  // Serial.println(hipPos);
+  // Serial.print(", SwitchCount: ");
+  // Serial.print(switchCount);
+  // Serial.print(", Switch ");
+  // Serial.println(analogRead(Jswitch));
+
+
+
+  //write to servo
+  FloorServo.write(floorPos);
+  LegServo.write(legPos);
+  HipServo.write(hipPos);
+  ArmServo.write(armPos);
+  //delay(5);
+}
+
+void checkForWin() {
+
+  if(digitalRead(recPin) == 1){
+    digitalWrite(LEDPin, 1 );
+    gameActive = false;
+  }
+
+  digitalWrite(headPin, 4095);
+
+  if (indexa > 4) {
+    indexa = 0;
+  }
+
+  int voltage = analogRead(swordPin);
+  voltages[indexa] = voltage;
+  int sum = 0;
+
+  for (int j = 0; j <= 4; j++) {
+    sum += voltages[j];
+  }
+  sum = sum / 5;
+  if (sum == 4095) {
+    digitalWrite(transPin, HIGH);
+    digitalWrite(LEDPin, LOW);
+    gameActive = false;
+    
+  } else {
+    digitalWrite(LEDPin, LOW);
+    digitalWrite(transPin, LOW);
+  }
+  indexa++;
+}
